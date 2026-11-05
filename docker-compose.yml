@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: netsentinel-postgres
+    environment:
+      POSTGRES_USER: netsentinel
+      POSTGRES_PASSWORD: netsentinel_secure_password
+      POSTGRES_DB: netsentinel
+    ports:
+      - "5432:5432"
+    volumes:
+      - netsentinel_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U netsentinel"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: netsentinel-redis
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: netsentinel-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://netsentinel:netsentinel_secure_password@postgres:5432/netsentinel
+      AI_PROVIDER_PREFERENCE: AUTO
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      DASHBOARD_REFRESH_SECONDS: "8"
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: netsentinel-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_WS_URL: ws://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  netsentinel_pgdata:
+
